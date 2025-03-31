@@ -10,27 +10,12 @@ import {
   Chip,
   Divider,
   Button,
-  Grid,
-  CircularProgress,
-  Alert,
-  Snackbar
+  Grid
 } from '@mui/material';
 import {
   Refresh as RefreshIcon
 } from '@mui/icons-material';
 
-// Importar os serviços de API ao invés de usar axios diretamente
-import { sprintService, workItemService, developerService } from './service/api';
-
-
-// Mapeamento de cores para status
-const statusColors = {
-  'New': '#3f51b5',       // Azul
-  'Active': '#4caf50',    // Verde
-  'Resolved': '#ff9800',  // Laranja
-  'In Progress': '#9c27b0', // Roxo
-  'default': '#607d8b'    // Cinza azulado
-};
 // Definir alturas específicas para garantir consistência
 const HEADER_SPRINT_HEIGHT = 48; // altura do cabeçalho de sprint
 const HEADER_WEEK_HEIGHT = 48; // altura do cabeçalho de semana
@@ -38,86 +23,21 @@ const HEADER_TOTAL_HEIGHT = HEADER_SPRINT_HEIGHT + HEADER_WEEK_HEIGHT; // altura
 const CELL_HEIGHT = 72; // altura em pixels para todas as células
 
 const SprintPlannerPage = () => {
-  // Estados para dados da API
-  const [sprints, setSprints] = useState([]);
-  const [workItems, setWorkItems] = useState([]);
-  const [developers, setDevelopers] = useState([]);
-  const [allocations, setAllocations] = useState({});
+  // Define number of weeks to display
+  const totalWeeks = 16; // Total number of weeks to display
+  const weeksPerSprint = 2; // Number of weeks per sprint
 
-  // Estados para UI
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [notification, setNotification] = useState({ open: false, message: '', severity: 'info' });
+  // Calculate total sprints based on weeks
+  const totalSprints = Math.ceil(totalWeeks / weeksPerSprint);
 
-  // Estado para drag & drop
-  const [draggingProject, setDraggingProject] = useState(null);
-  const [draggingSourceCell, setDraggingSourceCell] = useState(null);
-  const [expandedCells, setExpandedCells] = useState({});
-
-  // Carregar dados iniciais
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        // Buscar todas as fontes de dados em paralelo usando os serviços
-        const [sprintsRes, workItemsRes, developersRes, allocationsRes] = await Promise.all([
-          sprintService.getAll(),
-          workItemService.getAll(),
-          developerService.getAll(),
-          developerService.getAllocations()
-        ]);
-
-        setSprints(sprintsRes.data.sprints);
-        setWorkItems(workItemsRes.data.work_items);
-        setDevelopers(developersRes.data.developers);
-
-        // Converter alocações do formato da API para o formato do componente
-        const allocationMap = {};
-        allocationsRes.data.allocations.forEach(allocation => {
-          const cellId = getCellId(allocation.developer_id, allocation.week_index);
-          const workItem = workItemsRes.data.work_items.find(item => item.id === allocation.work_item_id);
-          if (workItem) {
-            allocationMap[cellId] = workItem;
-          }
-        });
-
-        setAllocations(allocationMap);
-        updateExpandedCells(allocationMap);
-
-        setNotification({
-          open: true,
-          message: 'Dados carregados com sucesso',
-          severity: 'success'
-        });
-      } catch (err) {
-        console.error('Erro ao carregar dados:', err);
-        setError('Falha ao carregar dados. Verifique a conexão com a API.');
-        setNotification({
-          open: true,
-          message: 'Erro ao carregar dados',
-          severity: 'error'
-        });
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchData();
-  }, []);
-
-  // Calcular semanas para exibição
-  const calculateWeekPeriods = () => {
-    if (!sprints || sprints.length === 0) return [];
-
+  // Generate date periods for each week (starting from today)
+  const getWeekPeriods = () => {
     const periods = [];
-    const totalWeeks = 16; // Podemos calcular baseado no período das sprints
-
-    // Usar a data de início da primeira sprint
-    let startDate = new Date(sprints[0].start_date);
+    const today = new Date();
 
     for (let i = 0; i < totalWeeks; i++) {
-      const weekStart = new Date(startDate);
-      weekStart.setDate(startDate.getDate() + (i * 7));
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() + (i * 7));
 
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekStart.getDate() + 6);
@@ -132,10 +52,43 @@ const SprintPlannerPage = () => {
     return periods;
   };
 
-  const weekPeriods = calculateWeekPeriods();
-  const totalWeeks = weekPeriods.length || 16;
-  const weeksPerSprint = 2; // Podemos calcular dinamicamente das datas das sprints
-  const totalSprints = Math.ceil(totalWeeks / weeksPerSprint);
+  const weekPeriods = getWeekPeriods();
+
+  // Sample developers
+  const initialDevelopers = [
+    { id: 'dev-1', name: 'João Silva', skills: ['Frontend', 'React'] },
+    { id: 'dev-2', name: 'Maria Oliveira', skills: ['Backend', 'Node.js'] },
+    { id: 'dev-3', name: 'Carlos Souza', skills: ['UI/UX', 'Design'] },
+    { id: 'dev-4', name: 'Ana Santos', skills: ['Fullstack', 'DevOps'] },
+    { id: 'dev-5', name: 'Pedro Costa', skills: ['QA', 'Testing'] },
+  ];
+
+  // Sample projects with Material Design colors
+  const initialProjects = [
+    { id: 'proj-1', name: 'User Authentication', estimatedWeeks: 4, color: '#3f51b5' }, // Indigo
+    { id: 'proj-2', name: 'Dashboard Redesign', estimatedWeeks: 3, color: '#4caf50' }, // Green
+    { id: 'proj-3', name: 'API Integration', estimatedWeeks: 2, color: '#9c27b0' }, // Purple
+    { id: 'proj-4', name: 'Mobile Responsive', estimatedWeeks: 1, color: '#ff9800' }, // Orange
+    { id: 'proj-5', name: 'Database Migration', estimatedWeeks: 3, color: '#f44336' }, // Red
+    { id: 'proj-6', name: 'Payment Gateway', estimatedWeeks: 2, color: '#009688' }, // Teal
+    { id: 'proj-7', name: 'Security Audit', estimatedWeeks: 2, color: '#607d8b' }, // Blue Gray
+    { id: 'proj-8', name: 'User Testing', estimatedWeeks: 1, color: '#ff5722' }, // Deep Orange
+  ];
+
+  // State for available projects and allocations
+  const [availableProjects, setAvailableProjects] = useState(initialProjects);
+  const [allocations, setAllocations] = useState({});
+
+  // State for drag operation
+  const [draggingProject, setDraggingProject] = useState(null);
+  const [draggingSourceCell, setDraggingSourceCell] = useState(null);
+
+  // Track which cells are part of expanded projects
+  const [expandedCells, setExpandedCells] = useState({});
+
+  useEffect(() => {
+    updateExpandedCells();
+  }, [allocations]);
 
   // Generate a unique ID for the cell (droppable area)
   const getCellId = (devId, weekIndex) => {
@@ -155,22 +108,21 @@ const SprintPlannerPage = () => {
   };
 
   // Update expanded cells based on allocations
-  const updateExpandedCells = (allocationMap) => {
+  const updateExpandedCells = () => {
     const newExpandedCells = {};
-    const currentAllocations = allocationMap || allocations;
 
-    Object.entries(currentAllocations).forEach(([cellId, workItem]) => {
+    Object.entries(allocations).forEach(([cellId, project]) => {
       // Extract the developer ID and week index from the cell ID
       const cellInfo = parseCellId(cellId);
       if (cellInfo) {
         const { devId, weekIndex } = cellInfo;
 
         // Mark subsequent cells as expanded
-        for (let i = 1; i < workItem.estimated_weeks; i++) {
+        for (let i = 1; i < project.estimatedWeeks; i++) {
           const expandedCellId = getCellId(devId, weekIndex + i);
           newExpandedCells[expandedCellId] = {
             sourceId: cellId,
-            project: workItem
+            project: project
           };
         }
       }
@@ -178,10 +130,6 @@ const SprintPlannerPage = () => {
 
     setExpandedCells(newExpandedCells);
   };
-
-  useEffect(() => {
-    updateExpandedCells();
-  }, [allocations]);
 
   // Check if a cell is part of a specific project
   const isCellPartOfProject = (devId, weekIndex, projectId) => {
@@ -280,16 +228,12 @@ const SprintPlannerPage = () => {
         // Verificar se há espaço suficiente para o projeto na nova posição
         // ignorando células ocupadas pelo próprio projeto
         let canMove = true;
-        for (let i = 0; i < project.estimated_weeks; i++) {
+        for (let i = 0; i < project.estimatedWeeks; i++) {
           const checkWeekIndex = weekIndex + i;
 
           // Skip if beyond total weeks
           if (checkWeekIndex >= totalWeeks) {
-            setNotification({
-              open: true,
-              message: "O projeto excede o período visível do planejamento",
-              severity: "warning"
-            });
+            alert("O projeto excede o período visível do planejamento.");
             setDraggingProject(null);
             setDraggingSourceCell(null);
             return;
@@ -306,11 +250,7 @@ const SprintPlannerPage = () => {
         }
 
         if (!canMove) {
-          setNotification({
-            open: true,
-            message: "Não é possível alocar o projeto aqui. Já existe uma alocação neste período.",
-            severity: "warning"
-          });
+          alert("Não é possível alocar o projeto aqui. Já existe uma alocação neste período.");
           setDraggingProject(null);
           setDraggingSourceCell(null);
           return;
@@ -326,25 +266,18 @@ const SprintPlannerPage = () => {
         newAllocations[cellId] = project;
 
         setAllocations(newAllocations);
-
-        // Enviar atualização para a API
-        saveAllocationsToAPI(newAllocations);
       }
     } else {
       // Estamos adicionando um novo projeto do painel lateral
 
       // Verificar se há espaço suficiente para o projeto
       let canAllocate = true;
-      for (let i = 0; i < project.estimated_weeks; i++) {
+      for (let i = 0; i < project.estimatedWeeks; i++) {
         const checkWeekIndex = weekIndex + i;
 
         // Skip if beyond total weeks
         if (checkWeekIndex >= totalWeeks) {
-          setNotification({
-            open: true,
-            message: "O projeto excede o período visível do planejamento",
-            severity: "warning"
-          });
+          alert("O projeto excede o período visível do planejamento.");
           setDraggingProject(null);
           setDraggingSourceCell(null);
           return;
@@ -357,11 +290,7 @@ const SprintPlannerPage = () => {
       }
 
       if (!canAllocate) {
-        setNotification({
-          open: true,
-          message: "Não é possível alocar o projeto aqui. Já existe uma alocação neste período.",
-          severity: "warning"
-        });
+        alert("Não é possível alocar o projeto aqui. Já existe uma alocação neste período.");
         setDraggingProject(null);
         setDraggingSourceCell(null);
         return;
@@ -372,12 +301,8 @@ const SprintPlannerPage = () => {
       newAllocations[cellId] = project;
 
       // Remover dos projetos disponíveis
-      const newWorkItems = workItems.filter(item => item.id !== project.id);
-      setWorkItems(newWorkItems);
+      setAvailableProjects(prev => prev.filter(p => p.id !== project.id));
       setAllocations(newAllocations);
-
-      // Enviar atualização para a API
-      saveAllocationsToAPI(newAllocations);
     }
 
     setDraggingProject(null);
@@ -400,13 +325,10 @@ const SprintPlannerPage = () => {
         // Remove from allocations
         const newAllocations = { ...allocations };
         delete newAllocations[projectCellId];
-
-        // Add back to workitems
-        setWorkItems([...workItems, project]);
         setAllocations(newAllocations);
 
-        // Enviar atualização para a API
-        saveAllocationsToAPI(newAllocations);
+        // Add back to available projects
+        setAvailableProjects(prev => [...prev, project]);
       }
     }
 
@@ -414,68 +336,13 @@ const SprintPlannerPage = () => {
     setDraggingSourceCell(null);
   };
 
-  // Save allocations to API
-  const saveAllocationsToAPI = async (newAllocations) => {
-    try {
-      // Converter allocations para o formato da API
-      const apiAllocations = Object.entries(newAllocations).map(([cellId, workItem]) => {
-        const cellInfo = parseCellId(cellId);
-        return {
-          developer_id: cellInfo.devId,
-          work_item_id: workItem.id,
-          sprint_id: "current", // Placeholder - podemos melhorar para usar a sprint correta
-          week_index: cellInfo.weekIndex
-        };
-      });
-
-      // Enviar para a API usando o serviço
-      await developerService.updateAllocations(apiAllocations);
-
-      setNotification({
-        open: true,
-        message: "Alocações salvas com sucesso",
-        severity: "success"
-      });
-    } catch (err) {
-      console.error('Erro ao salvar alocações:', err);
-      setNotification({
-        open: true,
-        message: "Erro ao salvar alocações",
-        severity: "error"
-      });
-    }
-  };
-
   // Reset the board
-  const resetBoard = async () => {
-    try {
-      setLoading(true);
-
-      // Limpar alocações na API usando o serviço
-      await developerService.clearAllocations();
-
-      // Recarregar dados
-      const workItemsRes = await workItemService.getAll();
-
-      setWorkItems(workItemsRes.data.work_items);
-      setAllocations({});
-      setExpandedCells({});
-
-      setNotification({
-        open: true,
-        message: "Planejamento resetado com sucesso",
-        severity: "success"
-      });
-    } catch (err) {
-      console.error('Erro ao resetar planejamento:', err);
-      setNotification({
-        open: true,
-        message: "Erro ao resetar planejamento",
-        severity: "error"
-      });
-    } finally {
-      setLoading(false);
-    }
+  const resetBoard = () => {
+    setAllocations({});
+    setExpandedCells({});
+    setAvailableProjects(initialProjects);
+    setDraggingProject(null);
+    setDraggingSourceCell(null);
   };
 
   // Get project data for a developer's row
@@ -489,35 +356,13 @@ const SprintPlannerPage = () => {
         projects.push({
           project,
           weekIndex,
-          width: Math.min(project.estimated_weeks, totalWeeks - weekIndex) * 96 - 8
+          width: Math.min(project.estimatedWeeks, totalWeeks - weekIndex) * 96 - 8
         });
       }
     });
 
     return projects;
   };
-
-  // Close notification
-  const handleCloseNotification = () => {
-    setNotification({ ...notification, open: false });
-  };
-
-  if (loading) {
-    return (
-      <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100%', p: 4 }}>
-        <CircularProgress />
-        <Typography variant="h6" sx={{ ml: 2 }}>Carregando dados...</Typography>
-      </Box>
-    );
-  }
-
-  if (error) {
-    return (
-      <Box sx={{ p: 4 }}>
-        <Alert severity="error">{error}</Alert>
-      </Box>
-    );
-  }
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%', bgcolor: 'background.default' }}>
@@ -563,7 +408,7 @@ const SprintPlannerPage = () => {
                 </Box>
 
                 {/* Developer rows */}
-                {developers.map(developer => (
+                {initialDevelopers.map(developer => (
                   <Box
                     key={developer.id}
                     sx={{
@@ -604,33 +449,28 @@ const SprintPlannerPage = () => {
                       bgcolor: 'background.default',
                       borderBottom: 1,
                       borderColor: 'divider',
-                      height: HEADER_SPRINT_HEIGHT,
+                      height: HEADER_SPRINT_HEIGHT, // Altura fixa para o cabeçalho de sprint
                     }}
                   >
-                    {Array.from({ length: totalSprints }, (_, sprintIndex) => {
-                      // Tenta encontrar a sprint correspondente nos dados da API
-                      const sprint = sprints[sprintIndex] || { name: `Sprint ${sprintIndex + 1}` };
-
-                      return (
-                        <Box
-                          key={`sprint-${sprintIndex}`}
-                          sx={{
-                            width: weeksPerSprint * 96,
-                            borderRight: 1,
-                            borderColor: 'divider',
-                            textAlign: 'center',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            height: '100%'
-                          }}
-                        >
-                          <Typography variant="subtitle1" fontWeight="medium">
-                            {sprint.name}
-                          </Typography>
-                        </Box>
-                      );
-                    })}
+                    {Array.from({ length: totalSprints }, (_, sprintIndex) => (
+                      <Box
+                        key={`sprint-${sprintIndex}`}
+                        sx={{
+                          width: weeksPerSprint * 96,
+                          borderRight: 1,
+                          borderColor: 'divider',
+                          textAlign: 'center',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          height: '100%'
+                        }}
+                      >
+                        <Typography variant="subtitle1" fontWeight="medium">
+                          Sprint {sprintIndex + 1}
+                        </Typography>
+                      </Box>
+                    ))}
                   </Box>
 
                   {/* Week headers - with time periods */}
@@ -640,7 +480,7 @@ const SprintPlannerPage = () => {
                       bgcolor: 'background.default',
                       borderBottom: 1,
                       borderColor: 'divider',
-                      height: HEADER_WEEK_HEIGHT
+                      height: HEADER_WEEK_HEIGHT // Altura fixa para o cabeçalho de semana
                     }}
                   >
                     {Array.from({ length: totalWeeks }, (_, weekIndex) => (
@@ -661,14 +501,14 @@ const SprintPlannerPage = () => {
                           Semana {weekIndex + 1}
                         </Typography>
                         <Typography variant="caption" color="text.secondary">
-                          {weekPeriods[weekIndex] || ''}
+                          {weekPeriods[weekIndex]}
                         </Typography>
                       </Box>
                     ))}
                   </Box>
 
                   {/* Developer rows with cells and overlaid projects */}
-                  {developers.map(developer => {
+                  {initialDevelopers.map(developer => {
                     // Get all projects for this developer
                     const devProjects = getDevProjectsForRow(developer.id);
 
@@ -733,7 +573,7 @@ const SprintPlannerPage = () => {
                               bottom: 8,
                               left: weekIndex * 96 + 4,
                               width: width - 17,
-                              bgcolor: project.color || statusColors[project.state] || statusColors.default,
+                              bgcolor: project.color,
                               color: 'white',
                               borderRadius: 1,
                               p: 1,
@@ -753,10 +593,10 @@ const SprintPlannerPage = () => {
                             onDragStart={(e) => handleDragStart(e, project, 'allocated', getCellId(developer.id, weekIndex))}
                           >
                             <Typography variant="caption" fontWeight="medium" display="block" noWrap>
-                              {project.title || project.name}
+                              {project.name}
                             </Typography>
                             <Typography variant="caption" sx={{ opacity: 0.9 }}>
-                              {project.estimated_weeks} semana(s)
+                              {project.estimatedWeeks} semana(s)
                             </Typography>
                           </Box>
                         ))}
@@ -789,7 +629,7 @@ const SprintPlannerPage = () => {
             color: 'primary.contrastText',
             borderTopLeftRadius: '0.75rem'
           }}>
-            <Typography variant="h6">User Stories Disponíveis</Typography>
+            <Typography variant="h6">Projetos Disponíveis</Typography>
             <Typography variant="body2" sx={{ opacity: 0.8, mt: 0.5 }}>
               Arraste para alocar
             </Typography>
@@ -799,8 +639,8 @@ const SprintPlannerPage = () => {
 
           <Box sx={{ flexGrow: 1, overflow: 'auto', p: 2, pt: 3 }}>
             <Grid container spacing={2}>
-              {workItems.map(workItem => (
-                <Grid item xs={12} key={workItem.id}>
+              {availableProjects.map(project => (
+                <Grid item xs={12} key={project.id}>
                   <Card
                     sx={{
                       cursor: 'move',
@@ -808,12 +648,12 @@ const SprintPlannerPage = () => {
                       transition: 'box-shadow 0.2s'
                     }}
                     draggable
-                    onDragStart={(e) => handleDragStart(e, workItem, 'available')}
+                    onDragStart={(e) => handleDragStart(e, project, 'available')}
                   >
                     <CardHeader
-                      title={workItem.title}
+                      title={project.name}
                       sx={{
-                        bgcolor: workItem.color || statusColors[workItem.state] || statusColors.default,
+                        bgcolor: project.color,
                         color: 'white',
                         py: 1.5,
                         '& .MuiCardHeader-title': {
@@ -824,12 +664,12 @@ const SprintPlannerPage = () => {
                     <CardContent sx={{ py: 1.5, bgcolor: 'grey.50' }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <Typography variant="body2" color="text.secondary">
-                          {workItem.estimated_weeks} semana{workItem.estimated_weeks > 1 ? 's' : ''}
+                          {project.estimatedWeeks} semana{project.estimatedWeeks > 1 ? 's' : ''}
                         </Typography>
                         <Chip
-                          label={workItem.state}
+                          label={project.estimatedWeeks > 2 ? 'Alta' : 'Média'}
                           size="small"
-                          color="primary"
+                          color={project.estimatedWeeks > 2 ? 'error' : 'info'}
                           variant="outlined"
                         />
                       </Box>
@@ -837,36 +677,10 @@ const SprintPlannerPage = () => {
                   </Card>
                 </Grid>
               ))}
-
-              {workItems.length === 0 && (
-                <Grid item xs={12}>
-                  <Box sx={{ p: 3, textAlign: 'center', color: 'text.secondary' }}>
-                    <Typography variant="body2">
-                      Não há mais user stories disponíveis para alocação.
-                    </Typography>
-                  </Box>
-                </Grid>
-              )}
             </Grid>
           </Box>
         </Box>
       </Box>
-
-      {/* Notification */}
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={6000}
-        onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-      >
-        <Alert
-          onClose={handleCloseNotification}
-          severity={notification.severity}
-          sx={{ width: '100%' }}
-        >
-          {notification.message}
-        </Alert>
-      </Snackbar>
     </Box>
   );
 };
